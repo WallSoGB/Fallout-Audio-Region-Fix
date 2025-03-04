@@ -18,11 +18,11 @@
 #define FIX_REGION_SOUND_TRANSITION
 #define DEBUG_SOUND_TRANSITION 0
 
-uint32_t TESSound::GetStartsAt() const {
+uint8_t TESSound::GetStartsAt() const {
 	return kData.ucStartsAt;
 }
 
-uint32_t TESSound::GetEndsAt() const {
+uint8_t TESSound::GetEndsAt() const {
 	return kData.ucEndsAt;
 }
 
@@ -322,126 +322,128 @@ void TESSound::UpdateRegionSounds() {
 			goto Exit;
 
 		const BSWin32AudioListener* pAudioListener = pWinAudio->pListener;
-		TESSound* pSound = nullptr;
-		bool bSomethingWithWeather = true;
-		bool bPlayingSoundFound = false;
-		auto pRegionSoundsIter = pRegionSounds;
-		while (pRegionSoundsIter && !pRegionSoundsIter->IsEmpty()) {
-			bSomethingWithWeather = true;
-			const TESRegionSound* pRegionSound = pRegionSoundsIter->GetItem();
+		auto pPlayingLoopSounds = BGSAcousticSpace::GetPlayingLoopSounds();
+		{
 
-			if (pRegionSound && pRegionSound->pSound) {
-				pSound = pRegionSound->pSound;
-				TESSound::Data kData = pSound->GetData();
-				const float fStartsAt = pSound->GetStartsAt() * 0.09375f;
-				const float fEndsAt = pSound->GetEndsAt() * 0.09375f;
-				bool bSomeWeatherFlags = kData.ConvertFlags() != 0;
+			auto pRegionSoundsIter = pRegionSounds;
+			while (pRegionSoundsIter && !pRegionSoundsIter->IsEmpty()) {
+				TESSound* pSound = nullptr;
+				bool bSomethingWithWeather = true;
+				bool bPlayingSoundFound = false;
+				const TESRegionSound* pRegionSound = pRegionSoundsIter->GetItem();
 
-				if (pSky) {
-					if (pRegionSound->uiFlags.Get() && pSky->pCurrentWeather) {
-						uint8_t ucWeatherFlags = pSky->pCurrentWeather->GetWeatherDataRaw(TESWeather::WD_FLAGS);
-						if (!pRegionSound->uiFlags.GetBit(ucWeatherFlags) && ucWeatherFlags == 0)
+				if (pRegionSound && pRegionSound->pSound) {
+					pSound = pRegionSound->pSound;
+					const float fStartsAt = float(pSound->GetStartsAt()) * 0.09375f;
+					const float fEndsAt = float(pSound->GetEndsAt()) * 0.09375f;
+					bool bHasWeatherFlags = TESSound::ConvertFlags(pSound->GetData().uiSoundFlags.Get()) != 0;
+
+					if (pSky) {
+						uint16_t usRegionSoundFlags = pRegionSound->uiFlags.Get();
+						if (usRegionSoundFlags && pSky->pCurrentWeather) {
+							uint8_t ucWeatherFlags = pSky->pCurrentWeather->GetWeatherDataRaw(TESWeather::WD_FLAGS);
+							if ((ucWeatherFlags & uint8_t(usRegionSoundFlags)) == 0 && ucWeatherFlags)
+								bSomethingWithWeather = false;
+						}
+
+						if (fabsf(fEndsAt - fStartsAt) >= 0.09375f && (fEndsAt > fStartsAt && (fGameHour < fStartsAt || fGameHour > fEndsAt) || fEndsAt < fStartsAt && fGameHour < fStartsAt && fGameHour > fEndsAt))
 							bSomethingWithWeather = false;
 					}
 
-					if (fabs(fEndsAt - fStartsAt) >= 0.09375f && (fEndsAt > fStartsAt && (fGameHour < fStartsAt || fGameHour > fEndsAt) || fEndsAt < fStartsAt && fGameHour < fStartsAt && fGameHour > fEndsAt))
-						bSomethingWithWeather = false;
-				}
+					BSSoundHandle* pFoundHandle = nullptr;
+					uint32_t uiFormID = pSound->GetFormID();
+					bPlayingSoundFound = pPlayingLoopSounds->GetAt(uiFormID, pFoundHandle);
+					if (bHasWeatherFlags && !bPlayingSoundFound && bSomethingWithWeather) {
+						constexpr uint32_t eFlags = BSGameSound::FLAG_DONT_CACHE | BSGameSound::FLAG_REGION_MUTE_WHEN_SUBMERGED | BSGameSound::FLAG_LOOP | BSGameSound::FLAG_2D;
+						const char* pPath = pSound->GetFilePath();
+						BSSoundHandle* pNewHandle = new BSSoundHandle();
 
-				BSSoundHandle* pFoundHandle = nullptr;
-				uint32_t uiFormID = pSound->GetFormID();
-				bPlayingSoundFound = BGSAcousticSpace::GetPlayingLoopSounds()->GetAt(uiFormID, pFoundHandle);
-				if (bSomeWeatherFlags && !bPlayingSoundFound && bSomethingWithWeather) {
-					constexpr uint32_t eFlags = BSGameSound::FLAG_DONT_CACHE | BSGameSound::FLAG_REGION_MUTE_WHEN_SUBMERGED | BSGameSound::FLAG_LOOP | BSGameSound::FLAG_2D;
-					const char* pPath = pSound->GetFilePath();
-					BSSoundHandle* pNewHandle = new BSSoundHandle();
+						*pNewHandle = pWinAudio->GetSoundHandleByFilePath(pPath, eFlags, pSound);
+						pNewHandle->bAssumeSuccess = true;
+						pPlayingLoopSounds->SetAt(uiFormID, pNewHandle);
+						pNewHandle->FadeInPlay(INISettingCollection::Audio::fRegionLoopFadeInTime->Float() * 1000.f);
 
-					*pNewHandle = pWinAudio->GetSoundHandleByFilePath(pPath, eFlags, pSound);
-					pNewHandle->bAssumeSuccess = true;
-					BGSAcousticSpace::GetPlayingLoopSounds()->SetAt(uiFormID, pNewHandle);
-					pNewHandle->FadeInPlay(INISettingCollection::Audio::fRegionLoopFadeInTime->Float() * 1000.f);
-
-				}
-				else if (bSomeWeatherFlags && bPlayingSoundFound) {
-					if (pFoundHandle->IsPlaying() && !bSomethingWithWeather) {
-						pFoundHandle->FadeOutAndRelease(INISettingCollection::Audio::fRegionLoopFadeOutTime->Float() * 1000.f);
-						BGSAcousticSpace::GetPlayingLoopSounds()->RemoveAt(uiFormID);
-						if (pFoundHandle)
-							delete pFoundHandle;
 					}
-					else if (pFoundHandle->IsValid() && !pFoundHandle->IsPlaying() && bSomethingWithWeather) {
-						pFoundHandle->FadeInPlay(INISettingCollection::Audio::fRegionLoopFadeInTime->Float() * 1000.f);
-					}
-				}
-				else if (!bSomeWeatherFlags && bSomethingWithWeather) {
-					float fChance = static_cast<float>(pRegionSound->uiChance) / 20000000.f;
-					if (BSRandom::IsRandomDecimalBelow(fChance)) {
-						BSSoundHandle kSoundToPlay;
-						if (pSound->GetFlag(kFlag_2D)) {
-							constexpr uint32_t eFlags = BSGameSound::FLAG_DONT_CACHE | BSGameSound::FLAG_REGION_MUTE_WHEN_SUBMERGED | BSGameSound::FLAG_UNKBIT8 | BSGameSound::FLAG_2D;
-							const char* pPath = pSound->GetFilePath();
-							kSoundToPlay = pWinAudio->GetSoundHandleByFilePath(pPath, eFlags, pSound);
+					else if (bHasWeatherFlags && bPlayingSoundFound) {
+						if (pFoundHandle->IsPlaying() && !bSomethingWithWeather) {
+							pFoundHandle->FadeOutAndRelease(INISettingCollection::Audio::fRegionLoopFadeOutTime->Float() * 1000.f);
+							pPlayingLoopSounds->RemoveAt(uiFormID);
+							if (pFoundHandle)
+								delete pFoundHandle;
 						}
-						else {
-							constexpr uint32_t eFlags = BSGameSound::FLAG_DONT_CACHE | BSGameSound::FLAG_REGION_MUTE_WHEN_SUBMERGED | BSGameSound::FLAG_UNKBIT8 | BSGameSound::FLAG_3D;
-							const char* pPath = pSound->GetFilePath();
-							kSoundToPlay = pWinAudio->GetSoundHandleByFilePath(pPath, eFlags, pSound);
+						else if (pFoundHandle->IsValid() && !pFoundHandle->IsPlaying() && bSomethingWithWeather) {
+							pFoundHandle->FadeInPlay(INISettingCollection::Audio::fRegionLoopFadeInTime->Float() * 1000.f);
 						}
-
-						NiPoint3 kPosition;
-						if (pAudioListener)
-							kPosition = pAudioListener->GetPosition();
-						else if (pPlayer)
-							kPosition = pPlayer->GetPos();
-
-						float fOffsetX = float(BSRandom::RandomUnsignedInt() % 650 + 100);
-						float fOffsetY = float(BSRandom::RandomUnsignedInt() % 650 + 100);
-						if (BSRandom::IsRandomDecimalBelow(0.5f))
-							fOffsetX = fOffsetX * -1.f;
-						if (BSRandom::IsRandomDecimalBelow(0.5f))
-							fOffsetY = fOffsetY * -1.f;
-						kPosition.x = kPosition.x + fOffsetX;
-						kPosition.y = kPosition.y + fOffsetY;
-						kPosition.z = kPosition.z + 256.f;
-
-						kSoundToPlay.SetPriority(UINT8_MAX);
-						kSoundToPlay.SetPosition(kPosition.x, kPosition.y, kPosition.z);
-						kSoundToPlay.Play(false);
 					}
-				}
+					else if (!bHasWeatherFlags && bSomethingWithWeather) {
+						float fChance = static_cast<float>(pRegionSound->uiChance) / 20000000.f;
+						if (BSRandom::IsRandomDecimalBelow(fChance)) {
+							BSSoundHandle kSoundToPlay;
+							if (pSound->GetFlag(kFlag_2D)) {
+								constexpr uint32_t eFlags = BSGameSound::FLAG_DONT_CACHE | BSGameSound::FLAG_REGION_MUTE_WHEN_SUBMERGED | BSGameSound::FLAG_UNKBIT8 | BSGameSound::FLAG_2D;
+								const char* pPath = pSound->GetFilePath();
+								kSoundToPlay = pWinAudio->GetSoundHandleByFilePath(pPath, eFlags, pSound);
+							}
+							else {
+								constexpr uint32_t eFlags = BSGameSound::FLAG_DONT_CACHE | BSGameSound::FLAG_REGION_MUTE_WHEN_SUBMERGED | BSGameSound::FLAG_UNKBIT8 | BSGameSound::FLAG_3D;
+								const char* pPath = pSound->GetFilePath();
+								kSoundToPlay = pWinAudio->GetSoundHandleByFilePath(pPath, eFlags, pSound);
+							}
 
-				pRegionSoundsIter = pRegionSoundsIter->GetNext();
+							NiPoint3 kPosition;
+							if (pAudioListener)
+								kPosition = pAudioListener->GetPosition();
+							else if (pPlayer)
+								kPosition = pPlayer->GetPos();
+
+							float fOffsetX = float(BSRandom::RandomUnsignedInt() % 650 + 100);
+							float fOffsetY = float(BSRandom::RandomUnsignedInt() % 650 + 100);
+							if (BSRandom::IsRandomDecimalBelow(0.5f))
+								fOffsetX = fOffsetX * -1.f;
+							if (BSRandom::IsRandomDecimalBelow(0.5f))
+								fOffsetY = fOffsetY * -1.f;
+							kPosition.x = kPosition.x + fOffsetX;
+							kPosition.y = kPosition.y + fOffsetY;
+							kPosition.z = kPosition.z + 256.f;
+
+							kSoundToPlay.SetPriority(UINT8_MAX);
+							kSoundToPlay.SetPosition(kPosition.x, kPosition.y, kPosition.z);
+							kSoundToPlay.Play(false);
+						}
+					}
+
+					pRegionSoundsIter = pRegionSoundsIter->GetNext();
+				}
 			}
+		}
 
-			// Clear playing loop sounds
-			{
-				auto pPlayingLoopSounds = BGSAcousticSpace::GetPlayingLoopSounds();
-				NiTMapIterator kIter = pPlayingLoopSounds->GetFirstPos();
-				auto pRegionSoundsIter2 = pRegionSounds;
-				bool bFound = false;
-				while (kIter) {
-					uint32_t uiFormID = 0;
-					BSSoundHandle* pHandle = nullptr;
-					pPlayingLoopSounds->GetNext(kIter, uiFormID, pHandle);
+		// Clear playing loop sounds
+		{
+			NiTMapIterator kIter = pPlayingLoopSounds->GetFirstPos();
+			auto pRegionSoundsIter = pRegionSounds;
+			bool bFound = false;
+			while (kIter) {
+				uint32_t uiFormID = 0;
+				BSSoundHandle* pHandle = nullptr;
+				pPlayingLoopSounds->GetNext(kIter, uiFormID, pHandle);
 
-					while (pRegionSoundsIter2 && !pRegionSoundsIter2->IsEmpty()) {
-						TESRegionSound* pPlayingRegionSound = pRegionSoundsIter2->GetItem();
-						if (pPlayingRegionSound && pPlayingRegionSound->pSound && pPlayingRegionSound->pSound->GetFormID() == uiFormID) {
-							bFound = true;
-							break;
-						}
-						pRegionSoundsIter2 = pRegionSoundsIter2->GetNext();
+				while (pRegionSoundsIter && !pRegionSoundsIter->IsEmpty()) {
+					TESRegionSound* pPlayingRegionSound = pRegionSoundsIter->GetItem();
+					if (pPlayingRegionSound && pPlayingRegionSound->pSound && pPlayingRegionSound->pSound->GetFormID() == uiFormID) {
+						bFound = true;
+						break;
 					}
-
-					if (bFound)
-						continue;
-
-					pPlayingLoopSounds->RemoveAt(uiFormID);
-					kIter = pPlayingLoopSounds->GetFirstPos();
-					pHandle->FadeOutAndRelease(INISettingCollection::Audio::fRegionLoopFadeOutTime->Float() * 1000.f);
-					if (pHandle)
-						delete pHandle;
+					pRegionSoundsIter = pRegionSoundsIter->GetNext();
 				}
+
+				if (bFound)
+					continue;
+
+				pPlayingLoopSounds->RemoveAt(uiFormID);
+				kIter = pPlayingLoopSounds->GetFirstPos();
+				pHandle->FadeOutAndRelease(INISettingCollection::Audio::fRegionLoopFadeOutTime->Float() * 1000.f);
+				if (pHandle)
+					delete pHandle;
 			}
 		}
 	}
@@ -450,14 +452,15 @@ void TESSound::UpdateRegionSounds() {
 	BGSAcousticSpace::SetTimeDelta(pWinAudio->GetTimeDelta());
 }
 
-uint32_t TESSound::Data::ConvertFlags() const {
-	if (uiSoundFlags.GetBit(0x10))
+// GAME - 0x5E39B0
+uint32_t TESSound::ConvertFlags(uint16_t ausFlags) {
+	if ((ausFlags & 0x10) != 0)
 		return 0x10;
 
-	if (uiSoundFlags.GetBit(0x200))
+	if ((ausFlags & 0x200) != 0)
 		return 0x2000000;
 
-	if (uiSoundFlags.GetBit(0x400))
+	if ((ausFlags & 0x400) != 0)
 		return 0x4000000;
 
 	return 0;

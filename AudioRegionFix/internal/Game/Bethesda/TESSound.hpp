@@ -47,8 +47,6 @@ public:
 		uint32_t	uiPriority;
 		uint32_t	uiLoopPointBegin;
 		uint32_t	uiLoopPointEnd;
-
-		uint32_t ConvertFlags() const;
 	};
 
 	BSString	strEditorID;
@@ -63,8 +61,8 @@ public:
 		return kData.uiSoundFlags.IsSet(pFlag);
 	}
 
-	uint32_t GetStartsAt() const;
-	uint32_t GetEndsAt() const;
+	uint8_t GetStartsAt() const;
+	uint8_t GetEndsAt() const;
 	TESSound::Data GetData() const;
 
 	const char* GetFilePath() const;
@@ -79,6 +77,8 @@ public:
 	static void ResetPlayingWeaponSounds();
 
 	static void UpdateRegionSounds();
+
+	static uint32_t ConvertFlags(uint16_t ausFlags);
 };
 
 ASSERT_SIZE(TESSound, 0x6C);
