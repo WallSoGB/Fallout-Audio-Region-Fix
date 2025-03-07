@@ -15,6 +15,7 @@
 #include "TESRegionDataSound.hpp"
 #include "TESWeather.hpp"
 
+#define FIX_MARKER_SPACES
 #define FIX_REGION_SOUND_TRANSITION
 #define DEBUG_SOUND_TRANSITION 0
 
@@ -93,7 +94,11 @@ void TESSound::UpdateRegionSounds() {
 	// Override current space with cell's acoustic space
 	{
 		BGSAcousticSpace* pCurrCellSpace = BGSAcousticSpace::GetCurrentCellSpace();
-		if (BGSAcousticSpace::GetJustChanged()) {
+#ifdef FIX_MARKER_SPACES // Credit to JazzIsParis
+		if (BGSAcousticSpace::GetJustChanged() && pCurrCellSpace) {
+#else
+		if (BGSAcousticSpace::GetJustChanged())
+#endif
 			if (pCurrCellSpace != BGSAcousticSpace::GetCurrentSpace()) {
 				BGSAcousticSpace::SetCurrentSpace(pCurrCellSpace);
 			}
