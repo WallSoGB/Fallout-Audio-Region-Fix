@@ -9,3 +9,8 @@ TESObjectCELL* TESObjectREFR::GetParentCell() const {
 TESBoundObject* TESObjectREFR::GetObjectReference() const {
 	return kData.pObjectReference;
 }
+
+// GAME - 0x568CB0
+float TESObjectREFR::GetRadius() {
+	return ThisCall<float>(0x568CB0, this);
+}

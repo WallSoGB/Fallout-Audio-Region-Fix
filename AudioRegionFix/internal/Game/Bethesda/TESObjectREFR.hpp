@@ -137,6 +137,8 @@ public:
 	TESObjectCELL* GetParentCell() const;
 
 	TESBoundObject* GetObjectReference() const;
+
+	float GetRadius();
 };
 
 ASSERT_SIZE(TESObjectREFR, 0x68);

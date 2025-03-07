@@ -358,6 +358,8 @@ public:
 	TESQuest*							pPatch04DebugQuest;
 
 	static PlayerCharacter* GetSingleton();
+
+	MusicMarker* GetCurrentMusicMarker();
 };
 
 ASSERT_OFFSET(PlayerCharacter, kFlycamPos, 0x7E0);
