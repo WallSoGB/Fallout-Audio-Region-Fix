@@ -287,6 +287,8 @@ public:
 	BSSimpleList<TESFile*>	kFiles;
 
 	inline uint32_t		GetFormID() const { return uiFormID; }
+
+	bool GetDisabled() const { return uiFormFlags.IsSet(DISABLED); }
 };
 
 ASSERT_SIZE(TESForm, 0x18);

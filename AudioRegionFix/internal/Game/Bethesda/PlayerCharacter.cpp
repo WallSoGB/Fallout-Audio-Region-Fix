@@ -4,6 +4,8 @@
 
 #define AUDIO_MARKER_DISTANCE_FIX
 
+const TESBoundObject* const* const pAudioMarker = (TESBoundObject**)0x11CA228;
+
 PlayerCharacter* PlayerCharacter::GetSingleton() {
 	return *(PlayerCharacter**)0x011DEA3C;
 }
@@ -25,8 +27,15 @@ MusicMarker* PlayerCharacter::GetCurrentMusicMarker() {
     while (pIter && pIter->GetItem()) {
         MusicMarker* pMarker = pIter->GetItem();
         pIter = pIter->GetNext();
-        if (!pMarker->pReference)
-			continue;
+
+        TESObjectREFR* pRef = pMarker->pReference;
+        if (!pRef)
+            continue;
+
+#ifdef AUDIO_MARKER_DISTANCE_FIX
+        if (pRef->GetObjectReference() != *pAudioMarker || pRef->GetDisabled())
+            continue;
+#endif
 
         NiPoint2 kMarkerPos = *pMarker->pReference->GetPos();
         float fDistance = (kPlayerPos - kMarkerPos).SqrLength();

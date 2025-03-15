@@ -9,7 +9,7 @@ BS_ALLOCATORS
 EXTERN_DLL_EXPORT bool NVSEPlugin_Query(const NVSEInterface* nvse, PluginInfo* info) {
 	info->infoVersion = PluginInfo::kInfoVersion;
 	info->name = "Audio Region Fix";
-	info->version = 130;
+	info->version = 131;
 
 	return !nvse->isEditor;
 }
