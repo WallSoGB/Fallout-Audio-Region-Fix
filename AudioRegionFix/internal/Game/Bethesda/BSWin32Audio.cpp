@@ -38,8 +38,8 @@ void BSWin32Audio::PrecacheSound(const char* apPath, uint32_t aeFlags, TESSound*
 }
 
 // GAME - 0xAD77F0
-void BSWin32Audio::SetGameHour(float afHour) {
-	ThisCall(0xAD77F0, this, afHour);
+void BSWin32Audio::SetGameHour(float afHour, int32_t aiUnk) {
+	ThisCall(0xAD77F0, this, afHour, aiUnk);
 }
 
 // GAME - 0x63D040

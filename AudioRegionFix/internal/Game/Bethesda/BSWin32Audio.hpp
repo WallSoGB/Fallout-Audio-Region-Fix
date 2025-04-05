@@ -48,7 +48,7 @@ public:
 
 	void PrecacheSound(const char* apPath, uint32_t aeFlags, TESSound* apSound);
 
-	void SetGameHour(float afHour);
+	void SetGameHour(float afHour, int32_t aiUnk = 0);
 
 	uint32_t GetTimeDelta() const;
 };
